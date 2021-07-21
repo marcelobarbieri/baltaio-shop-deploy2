@@ -498,6 +498,11 @@
 
     git init
     git add --all
-    git commit -m "Finalizado a API"
+    git commit -m "first commit"
 
     git remote add origin https://github.com/marcelobarbieri/baltaio-shop-deploy.git
+
+    error: remote origin already exists
+        git remote set-url origin https://github.com/marcelobarbieri/baltaio-shop-deploy.git    
+
+    git push -u origin main
