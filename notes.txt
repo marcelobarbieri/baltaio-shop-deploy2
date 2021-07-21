@@ -1,0 +1,503 @@
+
+...
+
+--------------------------------------------------------------------------------------------------------------
+
+*** EF Core e SQL Server
+
+> Windows Terminal
+
+    dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+
+> VSCode
+    - appsettings.json
+    - appsettings.Development.json
+
+        "ConnectionStrings": {
+            "connectionString":"server=localhost,1433;database=shop;User ID=SA;Password=1q2w3e4r@#$"    
+        }
+
+    - Startup.cs
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            ...
+                    services.AddDbContext<DataContext>(
+                        opt => opt.UseSqlServer(
+                            Configuration.GetConnectionString("connectionString")
+                        )
+                    );
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Conectando ao SQL Server
+
+> Azure Data Studio
+
+    CREATE DATABASE [Shop]
+
+> Windows Terminal
+
+    // instalar ferramentas com os comandos do EF
+    dotnet tool install --global dotnet-ef
+
+    // informar como o EF gera o banco de dados baseado na aplicação
+    dotnet add package Microsoft.EntityFrameworkCore.Design
+
+    // cria pasta Migrations no projeto 
+    dotnet ef migrations add InitialCreate
+
+    // atualiza modelo no banco de dados
+    dotnet ef database update
+
+    // carrega a api
+    dotnet watch run
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Autenticação e Autorização
+
+> Windows Terminal
+
+    dotnet add package Microsoft.AspNetCore.Authentication
+    dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer
+
+        (JWT - Jason Web Token)
+
+> VSCode
+
+    - Settings.cs
+
+        namespace Shop
+        {
+            public static class Settings
+            {
+                public static string Secret = "fedaf7d8863b48e197b9287d492b708e";
+            }
+        }    
+
+    - Startup.cs
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            ...
+
+            var key = Encoding.ASCII.GetBytes(Settings.Secret);
+            services.AddAuthentication(x =>
+                {
+                    x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                    x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                }
+            ).AddJwtBearer(x =>
+                {
+                    x.RequireHttpsMetadata = false;
+                    x.SaveToken = true;
+                    x.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new SymmetricSecurityKey(key),
+                        ValidateIssuer = false,
+                        ValidateAudience = false
+                    }
+                }
+            );
+
+        ...
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            ...
+
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Gerando o Token
+
+> VSCode
+
+- Criação do serviço Services/TokenService.cs
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Autenticando
+
+> VSCode
+
+- Criação do controlador de usuários Controllers/UserController.cs
+
+> Postman
+
+    POST    https://localhost:5001/v1/users/
+
+        {
+            "username":"andrebaltieri",
+            "password":"andrebaltieri",
+            "role":"employee"
+        }
+
+    POST    https://localhost:5001/v1/users/login
+
+        {
+            "user": {
+                "id": 1,
+                "username": "andrebaltieri",
+                "password": "andrebaltieri",
+                "role": "employee"
+            },
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJyb2xlIjoiZW1wbG95ZWUiLCJuYmYiOjE2MjY2OTEyNzUsImV4cCI6MTYyNjY5ODQ3NSwiaWF0IjoxNjI2NjkxMjc1fQ.iv2xy5vdLe-1aefh9emcrseqJJ_WUEoIi5RGgjh0dJM"
+        }    
+
+> jwt.io (Inspecionar Token)
+
+        Encoded
+                eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJyb2xlIjoiZW1wbG95ZWUiLCJuYmYiOjE2MjY2OTEyNzUsImV4cCI6MTYyNjY5ODQ3NSwiaWF0IjoxNjI2NjkxMjc1fQ.iv2xy5vdLe-1aefh9emcrseqJJ_WUEoIi5RGgjh0dJM                        
+            Invalid Signature            
+
+        Decoded
+
+            Header
+                {
+                    "alg": "HS256",
+                    "typ": "JWT"
+                }
+            Payload
+                {
+                    "unique_name": "1",
+                    "role": "employee",
+                    "nbf": 1626691275,
+                    "exp": 1626698475,
+                    "iat": 1626691275
+                }     
+
+            Verify Signature                       
+                HMACSHA256(
+                    base64UrlEncode(header) + "." +
+                    base64UrlEncode(payload),                
+                    <your-256-bit-secret> // Setings.css Secret
+                ) secret base64 encoded            
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Autorizando
+
+> VSCode
+
+ - UserController.cs
+
+        [HttpGet]
+        [Route("anonimo")]
+        [AllowAnonymous]
+        public string Anonimo() => "Anonimo";
+
+        [HttpGet]
+        [Route("autenticado")]
+        [Authorize]
+        public string Autenticado() => "Autenticado";
+
+        [HttpGet]
+        [Route("funcionario")]
+        [Authorize(Roles = "employee")]
+        public string Funcionario() => "Funcionario";
+
+        [HttpGet]
+        [Route("gerente")]
+        [Authorize(Roles = "manager")]
+        public string Gerente() => "Gerente";
+
+> Postman
+
+- Teste inicial
+
+    GET https://localhost:5001/v1/users/anonimo
+            Anonimo
+    GET https://localhost:5001/v1/users/autenticado     
+            401 - Unauthorized
+
+            Headers
+                + Authorization
+                    Bearer <token>
+
+    GET https://localhost:5001/v1/users/funcionario
+            401 - Unauthorized    
+    GET https://localhost:5001/v1/users/gerente
+            401 - Unauthorized    
+
+- Gerar novo token
+
+    POST https://localhost:5001/v1/users/login
+
+        Body
+            {
+                "username":"andrebaltieri",
+                "password":"andrebaltieri"
+            }    
+
+        Status 200: OK        
+            {
+                "user": {
+                    "id": 1,
+                    "username": "andrebaltieri",
+                    "password": "andrebaltieri",
+                    "role": "employee"
+                },
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjEiLCJyb2xlIjoiZW1wbG95ZWUiLCJuYmYiOjE2MjY2OTI0MTMsImV4cCI6MTYyNjY5OTYxMywiaWF0IjoxNjI2NjkyNDEzfQ.djLI621gZ8n_KoDPQqdljGq60hnUGR6rDyRPqe75mqg"
+            }        
+
+- Autorizando
+
+    GET https://localhost:5001/v1/users/autenticado     
+        Headers
+            + Authorization
+                Bearer <token>
+        Status: 200 Ok
+
+    GET https://localhost:5001/v1/users/funcionario
+        Headers
+            + Authorization
+                Bearer <token>
+        Status: 200 Ok                
+
+    GET https://localhost:5001/v1/users/gerente
+        Headers
+            + Authorization
+                Bearer <token>
+        Status: 403 Forbidden
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Segurança nos Controllers
+
+    [AllowAnonymous]
+    [Authorize(Roles = "employee")]
+    [Authorize(Roles = "manager")]
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Versionamento, Cache e Compressão
+
+> VSCode
+
+    - Versionamento 
+        Controllers
+            [Route("v1/categories")]
+            [Route("v1/products")]
+            [Route("v1/users")]
+
+    - Compressão e Cache
+
+        Startup.cs
+
+        ...
+            public void ConfigureServices(IServiceCollection services)
+            {
+                services.AddCors();
+                services.AddResponseCompression(options =>
+                {
+                    options.Providers.Add<GzipCompressionProvider>();
+                    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/json" });
+                });            
+                // services.AddResponseCaching();
+                services.AddControllers();
+                ...
+
+        ...
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            ...
+
+            app.UseRouting();
+
+            app.UseCors(x => x
+                .AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader());
+
+            app.UseAuthentication();
+            app.UseAuthorization();                
+
+            ...
+
+        Controllers
+
+            - Pode ser não usar cache no Startup.cs e dizer ao método do controller que quer cache
+            ...
+                [Route("v1/categories")]
+                public class CategoryController : ControllerBase
+                {
+                    [HttpGet]
+                    [Route("")]
+                    [AllowAnonymous]
+                    [ResponseCache(VaryByHeader = "User-Agent", Location = ResponseCacheLocation.Any, Duration = 30)]
+                    public async Task<ActionResult<List<Category>>> Get([FromServices] DataContext context)
+                    ...
+
+            Pode ser usar cache no Startup.cs e dizer ao método do controller que não quer cache
+            ...
+                [Route("v1/categories")]
+                public class CategoryController : ControllerBase
+                {
+                    [HttpGet]
+                    [Route("")]
+                    [AllowAnonymous]
+                    [ResponseCache(Location = ResponseCacheLocation.None, Duration = 0, NoStore = true)]                
+                    public async Task<ActionResult<List<Category>>> Get([FromServices] DataContext context)
+                    ...
+
+> Postman
+
+    GET https://localhost:5001/v1/categories
+    Cache-Control   public,max-age=30
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Documentando a API
+
+> Windows Terminal
+
+    dotnet add package Swashbuckle.AspNetCore -v 5.0.0-rc4
+
+> VSCode
+
+- Startup.cs
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+
+            ...
+
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Shop", Version = "v1" });
+            });
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+
+            app.UseHttpsRedirection();
+
+            app.UseSwagger();
+            app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Shop v1"));
+
+            app.UseRouting();     
+
+            ...   
+
+> Postman
+
+    GET     https://localhost:5001/swagger/v1/swagger.json
+
+> Navegador da Internet
+
+    https://localhost:5001/swagger/
+
+--------------------------------------------------------------------------------------------------------------
+
+*** IMPORTANTE: Ajustes na API
+
+> VSCode
+
+    - UserController.cs
+
+        [HttpPost]
+        [Route("")]
+        [AllowAnonymous]
+        // [Authorize(Roles = "manager")]
+        public async Task<ActionResult<User>> Post([FromServices] DataContext context, [FromBody] User model)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+    >           // força o usuário a ser sempre "funcionário"
+                model.Role = "employee";
+
+                ...
+
+                // esconde a senha
+    >           model.Password = "";
+
+                return model;
+
+                ...
+
+        ...
+
+        [HttpPost]
+        [Route("login")]
+        public async Task<ActionResult<dynamic>> Authenticate([FromServices] DataContext context, [FromBody] User model)
+        {
+            var user = await context.Users
+                .AsNoTracking()
+                .Where(x => x.Username == model.Username && x.Password == model.Password)
+                .FirstOrDefaultAsync();
+
+            if (user == null)
+                return NotFound(new { message = "Usuário ou senha inválidos" });
+
+            var token = TokenService.GenerateToken(user);
+            // esconde a senha
+    >       user.Password = "";       
+            return new
+            {
+                user = user,
+                token = token
+            };                     
+
+
+    - TokenService.cs
+
+        ...
+
+        public static class TokenService
+        {
+            public static string GenerateToken(User user)
+            {
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var key = Encoding.ASCII.GetBytes(Settings.Secret);
+                var tokenDescriptor = new SecurityTokenDescriptor
+                {
+                    Subject = new ClaimsIdentity(new Claim[]
+                    {
+        >               new Claim(ClaimTypes.Name, user.Username.ToString()),
+
+
+    - Startup.cs
+
+        >   services.AddDbContext<DataContext>(opt => opt.UseInMemoryDatabase("Database")); 
+        >   //services.AddDbContext<DataContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("connectionString")));        
+
+        Não é mais necessária a injeção de dependência abaixo pois o AddDbContext já faz a injeção
+            // services.AddScoped<DataContext, DataContext>(); // DataContext não muda
+
+--------------------------------------------------------------------------------------------------------------
+
+*** Iniciando com Microsoft Azure
+*** Resource Groups
+*** WebApp
+*** SQL Server
+*** Escalonamento Automático
+*** Connection String
+*** Enviando o Código para o GitHub
+
+> GitHub
+
+    Criar repositório
+
+> Windows Terminal
+
+    git config --global user.email "marcelodpbarbieri@gmail.com"
+
+    git init
+    git add --all
+    git commit -m "Finalizado a API"
+
+    git remote add origin https://github.com/marcelobarbieri/baltaio-shop-deploy.git
