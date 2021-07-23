@@ -61,8 +61,8 @@ namespace Shop
                 }
             );
 
-            services.AddDbContext<DataContext>(opt => opt.UseInMemoryDatabase("Database")); // informar utilização de contexto
-            //services.AddDbContext<DataContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("connectionString")));
+            //services.AddDbContext<DataContext>(opt => opt.UseInMemoryDatabase("Database")); // informar utilização de contexto
+            services.AddDbContext<DataContext>(opt => opt.UseSqlServer(Configuration.GetConnectionString("connectionString")));
 
             // injeção de dependências
             // services.AddScoped<DataContext, DataContext>(); // DataContext não muda
